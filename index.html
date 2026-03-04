@@ -38,6 +38,11 @@ video {
     margin-top: 10px;
     color: #aaa;
 }
+
+progress {
+    width: 80%;
+    margin-top: 10px;
+}
 </style>
 </head>
 <body>
@@ -58,6 +63,7 @@ video {
 
 <button onclick="convertVideo()">Convert to AMV / AVI</button>
 
+<progress id="progressBar" value="0" max="100"></progress>
 <div id="status"></div>
 
 <video id="preview" controls></video>
@@ -69,11 +75,17 @@ video {
 const { createFFmpeg, fetchFile } = FFmpeg;
 const ffmpeg = createFFmpeg({ log: true });
 
+ffmpeg.setProgress(({ ratio }) => {
+    const progressBar = document.getElementById("progressBar");
+    progressBar.value = Math.floor(ratio * 100);
+});
+
 async function convertVideo() {
     const fileInput = document.getElementById("upload");
     const status = document.getElementById("status");
     const preview = document.getElementById("preview");
     const downloadLink = document.getElementById("downloadLink");
+    const progressBar = document.getElementById("progressBar");
 
     if (!fileInput.files.length) {
         alert("Upload an MP4 file first.");
@@ -85,13 +97,13 @@ async function convertVideo() {
     const [width, height] = sizeOption.split('x');
 
     status.innerText = "Loading FFmpeg...";
+    progressBar.value = 0;
     if (!ffmpeg.isLoaded()) {
         await ffmpeg.load();
     }
 
     ffmpeg.FS('writeFile', file.name, await fetchFile(file));
 
-    // Try AMV first
     try {
         status.innerText = `Converting to AMV (${width}x${height})...`;
         await ffmpeg.run(
@@ -113,15 +125,17 @@ async function convertVideo() {
         downloadLink.style.display = "inline";
         downloadLink.innerText = "Download AMV";
         status.innerText = "AMV Conversion Successful!";
+        progressBar.value = 100;
         return;
 
     } catch (e) {
         console.warn("AMV failed, trying AVI...");
     }
 
-    // Fallback to AVI
     try {
         status.innerText = `AMV failed. Converting to AVI (${width}x${height})...`;
+        progressBar.value = 0;
+
         await ffmpeg.run(
             "-i", file.name,
             "-vf", `scale=${width}:${height}`,
@@ -141,9 +155,12 @@ async function convertVideo() {
         downloadLink.style.display = "inline";
         downloadLink.innerText = "Download AVI";
         status.innerText = "AVI Conversion Successful!";
+        progressBar.value = 100;
+
     } catch (err) {
         status.innerText = "Conversion failed completely.";
         alert("Both AMV and AVI conversions failed.");
+        progressBar.value = 0;
     }
 }
 </script>
