@@ -1,2 +1,2 @@
-# AMV-to-MP3-Player-format
-yes...
+# RizzPlayer
+convert mp4 videos to mp3 player format
