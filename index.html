@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>RizzPlayer - MP4 to MP3 Player Format Converter</title>
+<style>
+body {
+    background: #0f0f0f;
+    color: white;
+    font-family: Arial, sans-serif;
+    text-align: center;
+    padding: 20px;
+}
+
+h1 {
+    color: #00ffcc;
+}
+
+button {
+    background: #00ffcc;
+    border: none;
+    padding: 10px 20px;
+    margin: 10px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+button:hover {
+    background: #00ccaa;
+}
+
+video {
+    margin-top: 20px;
+    border: 2px solid #00ffcc;
+}
+
+#status {
+    margin-top: 10px;
+    color: #aaa;
+}
+</style>
+</head>
+<body>
+
+<h1>RizzPlayer</h1>
+
+<input type="file" id="upload" accept="video/mp4"><br><br>
+
+<label>
+  <input type="radio" name="size" value="244x176" checked>
+  244×176 (most compatible)
+</label>
+<label>
+  <input type="radio" name="size" value="176x244">
+  176×244
+</label>
+<br><br>
+
+<button onclick="convertVideo()">Convert to AMV / AVI</button>
+
+<div id="status"></div>
+
+<video id="preview" controls></video>
+<br>
+<a id="downloadLink" style="display:none;" download>Download Converted Video</a>
+
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.2/dist/ffmpeg.min.js"></script>
+<script>
+const { createFFmpeg, fetchFile } = FFmpeg;
+const ffmpeg = createFFmpeg({ log: true });
+
+async function convertVideo() {
+    const fileInput = document.getElementById("upload");
+    const status = document.getElementById("status");
+    const preview = document.getElementById("preview");
+    const downloadLink = document.getElementById("downloadLink");
+
+    if (!fileInput.files.length) {
+        alert("Upload an MP4 file first.");
+        return;
+    }
+
+    const file = fileInput.files[0];
+    const sizeOption = document.querySelector('input[name="size"]:checked').value;
+    const [width, height] = sizeOption.split('x');
+
+    status.innerText = "Loading FFmpeg...";
+    if (!ffmpeg.isLoaded()) {
+        await ffmpeg.load();
+    }
+
+    ffmpeg.FS('writeFile', file.name, await fetchFile(file));
+
+    // Try AMV first
+    try {
+        status.innerText = `Converting to AMV (${width}x${height})...`;
+        await ffmpeg.run(
+            "-i", file.name,
+            "-vf", `scale=${width}:${height}`,
+            "-c:v", "amv",
+            "output.amv"
+        );
+
+        const data = ffmpeg.FS('readFile', "output.amv");
+        const blob = new Blob([data.buffer], { type: "video/amv" });
+        const url = URL.createObjectURL(blob);
+
+        preview.src = url;
+        preview.width = width;
+        preview.height = height;
+        downloadLink.href = url;
+        downloadLink.download = "rizzplayer_output.amv";
+        downloadLink.style.display = "inline";
+        downloadLink.innerText = "Download AMV";
+        status.innerText = "AMV Conversion Successful!";
+        return;
+
+    } catch (e) {
+        console.warn("AMV failed, trying AVI...");
+    }
+
+    // Fallback to AVI
+    try {
+        status.innerText = `AMV failed. Converting to AVI (${width}x${height})...`;
+        await ffmpeg.run(
+            "-i", file.name,
+            "-vf", `scale=${width}:${height}`,
+            "-c:v", "mpeg4",
+            "output.avi"
+        );
+
+        const data = ffmpeg.FS('readFile', "output.avi");
+        const blob = new Blob([data.buffer], { type: "video/x-msvideo" });
+        const url = URL.createObjectURL(blob);
+
+        preview.src = url;
+        preview.width = width;
+        preview.height = height;
+        downloadLink.href = url;
+        downloadLink.download = "rizzplayer_output.avi";
+        downloadLink.style.display = "inline";
+        downloadLink.innerText = "Download AVI";
+        status.innerText = "AVI Conversion Successful!";
+    } catch (err) {
+        status.innerText = "Conversion failed completely.";
+        alert("Both AMV and AVI conversions failed.");
+    }
+}
+</script>
+
+</body>
+</html>
